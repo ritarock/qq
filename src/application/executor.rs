@@ -1,6 +1,6 @@
 use crate::domain::entity::{Record, Table};
 use crate::domain::repository::TableRepository;
-use crate::application::query::{Query, SelectFields};
+use crate::application::query::{Query, SelectFields, WhereClause, Condition, Operator};
 use anyhow::Result;
 use std::collections::HashMap;
 
@@ -18,15 +18,17 @@ impl<R: TableRepository> QueryExecutor<R> {
         // データソースからテーブルを読み込む
         let table = self.repository.load(&query.from)?;
 
+        // WHERE句を適用
+        let filtered_table = if let Some(where_clause) = &query.where_clause {
+            self.apply_where(&table, where_clause)?
+        } else {
+            table
+        };
+
         // SELECT句を適用
-        let filtered_table = self.apply_select(&table, &query.select_fields)?;
+        let result_table = self.apply_select(&filtered_table, &query.select_fields)?;
 
-        // WHERE句を適用（将来の拡張）
-        // if let Some(where_clause) = &query.where_clause {
-        //     filtered_table = self.apply_where(&filtered_table, where_clause)?;
-        // }
-
-        Ok(filtered_table)
+        Ok(result_table)
     }
 
     fn apply_select(&self, table: &Table, select_fields: &SelectFields) -> Result<Table> {
@@ -49,6 +51,64 @@ impl<R: TableRepository> QueryExecutor<R> {
                     .collect();
 
                 Ok(Table::new(fields.clone(), filtered_records))
+            }
+        }
+    }
+
+    fn apply_where(&self, table: &Table, where_clause: &WhereClause) -> Result<Table> {
+        let filtered_records: Vec<Record> = table
+            .records
+            .iter()
+            .filter(|record| self.evaluate_conditions(record, &where_clause.conditions))
+            .cloned()
+            .collect();
+
+        Ok(Table::new(table.headers.clone(), filtered_records))
+    }
+
+    fn evaluate_conditions(&self, record: &Record, conditions: &[Condition]) -> bool {
+        // 全ての条件がANDで結合されている
+        conditions.iter().all(|condition| self.evaluate_condition(record, condition))
+    }
+
+    fn evaluate_condition(&self, record: &Record, condition: &Condition) -> bool {
+        let record_value = match record.get(&condition.field) {
+            Some(v) => v,
+            None => return false,
+        };
+
+        match &condition.operator {
+            Operator::Equal => record_value == &condition.value,
+            Operator::NotEqual => record_value != &condition.value,
+            Operator::GreaterThan => {
+                // 数値比較を試みる
+                if let (Ok(rv), Ok(cv)) = (record_value.parse::<f64>(), condition.value.parse::<f64>()) {
+                    rv > cv
+                } else {
+                    // 文字列として比較
+                    record_value > &condition.value
+                }
+            }
+            Operator::GreaterOrEqual => {
+                if let (Ok(rv), Ok(cv)) = (record_value.parse::<f64>(), condition.value.parse::<f64>()) {
+                    rv >= cv
+                } else {
+                    record_value >= &condition.value
+                }
+            }
+            Operator::LessThan => {
+                if let (Ok(rv), Ok(cv)) = (record_value.parse::<f64>(), condition.value.parse::<f64>()) {
+                    rv < cv
+                } else {
+                    record_value < &condition.value
+                }
+            }
+            Operator::LessOrEqual => {
+                if let (Ok(rv), Ok(cv)) = (record_value.parse::<f64>(), condition.value.parse::<f64>()) {
+                    rv <= cv
+                } else {
+                    record_value <= &condition.value
+                }
             }
         }
     }
@@ -156,5 +216,112 @@ mod tests {
         assert_eq!(result.records.len(), 2);
         assert_eq!(result.records[0].get("name"), Some(&"Alice".to_string()));
         assert_eq!(result.records[0].get("id"), None);
+    }
+
+    #[test]
+    fn test_apply_where_equal() {
+        let table = create_test_table();
+        let repository = MockRepository::new(table.clone());
+        let executor = QueryExecutor::new(repository);
+
+        let where_clause = WhereClause {
+            conditions: vec![Condition {
+                field: "id".to_string(),
+                operator: Operator::Equal,
+                value: "1".to_string(),
+            }],
+        };
+
+        let result = executor.apply_where(&table, &where_clause).unwrap();
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.records[0].get("id"), Some(&"1".to_string()));
+    }
+
+    #[test]
+    fn test_apply_where_not_equal() {
+        let table = create_test_table();
+        let repository = MockRepository::new(table.clone());
+        let executor = QueryExecutor::new(repository);
+
+        let where_clause = WhereClause {
+            conditions: vec![Condition {
+                field: "id".to_string(),
+                operator: Operator::NotEqual,
+                value: "1".to_string(),
+            }],
+        };
+
+        let result = executor.apply_where(&table, &where_clause).unwrap();
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.records[0].get("id"), Some(&"2".to_string()));
+    }
+
+    #[test]
+    fn test_apply_where_greater_than() {
+        let table = create_test_table();
+        let repository = MockRepository::new(table.clone());
+        let executor = QueryExecutor::new(repository);
+
+        let where_clause = WhereClause {
+            conditions: vec![Condition {
+                field: "team_id".to_string(),
+                operator: Operator::GreaterThan,
+                value: "1".to_string(),
+            }],
+        };
+
+        let result = executor.apply_where(&table, &where_clause).unwrap();
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.records[0].get("team_id"), Some(&"2".to_string()));
+    }
+
+    #[test]
+    fn test_apply_where_multiple_conditions() {
+        let table = create_test_table();
+        let repository = MockRepository::new(table.clone());
+        let executor = QueryExecutor::new(repository);
+
+        let where_clause = WhereClause {
+            conditions: vec![
+                Condition {
+                    field: "team_id".to_string(),
+                    operator: Operator::GreaterOrEqual,
+                    value: "1".to_string(),
+                },
+                Condition {
+                    field: "id".to_string(),
+                    operator: Operator::LessOrEqual,
+                    value: "1".to_string(),
+                },
+            ],
+        };
+
+        let result = executor.apply_where(&table, &where_clause).unwrap();
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.records[0].get("id"), Some(&"1".to_string()));
+    }
+
+    #[test]
+    fn test_execute_with_where() {
+        let table = create_test_table();
+        let repository = MockRepository::new(table);
+        let executor = QueryExecutor::new(repository);
+
+        let query = Query {
+            select_fields: SelectFields::Fields(vec!["name".to_string()]),
+            from: "test.csv".to_string(),
+            where_clause: Some(WhereClause {
+                conditions: vec![Condition {
+                    field: "id".to_string(),
+                    operator: Operator::Equal,
+                    value: "1".to_string(),
+                }],
+            }),
+        };
+
+        let result = executor.execute(&query).unwrap();
+        assert_eq!(result.headers, vec!["name"]);
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.records[0].get("name"), Some(&"Alice".to_string()));
     }
 }
