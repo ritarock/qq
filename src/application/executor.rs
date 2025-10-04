@@ -181,6 +181,7 @@ impl<R: TableRepository> QueryExecutor<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::query::OrderColumn;
     use crate::domain::entity::{Record, Table};
     use crate::domain::repository::TableRepository;
     use anyhow::Result;
