@@ -33,8 +33,15 @@ impl<R: TableRepository> QueryExecutor<R> {
             filtered_table
         };
 
+        // LIMIT句を適用
+        let limited_table = if let Some(limit) = query.limit {
+            self.apply_limit(&sorted_table, limit)?
+        } else {
+            sorted_table
+        };
+
         // SELECT句を適用
-        let result_table = self.apply_select(&sorted_table, &query.select_fields)?;
+        let result_table = self.apply_select(&limited_table, &query.select_fields)?;
 
         Ok(result_table)
     }
@@ -158,6 +165,17 @@ impl<R: TableRepository> QueryExecutor<R> {
 
         Ok(Table::new(table.headers.clone(), sorted_records))
     }
+
+    fn apply_limit(&self, table: &Table, limit: usize) -> Result<Table> {
+        let limited_records: Vec<Record> = table
+            .records
+            .iter()
+            .take(limit)
+            .cloned()
+            .collect();
+
+        Ok(Table::new(table.headers.clone(), limited_records))
+    }
 }
 
 #[cfg(test)]
@@ -212,6 +230,7 @@ mod tests {
             from: "test.csv".to_string(),
             where_clause: None,
             order_by: None,
+            limit: None,
         };
 
         let result = executor.execute(&query).unwrap();
@@ -230,6 +249,7 @@ mod tests {
             from: "test.csv".to_string(),
             where_clause: None,
             order_by: None,
+            limit: None,
         };
 
         let result = executor.execute(&query).unwrap();
@@ -366,6 +386,7 @@ mod tests {
                 }],
             }),
             order_by: None,
+            limit: None,
         };
 
         let result = executor.execute(&query).unwrap();
@@ -515,11 +536,94 @@ mod tests {
                     direction: SortDirection::Asc,
                 }],
             }),
+            limit: None,
         };
 
         let result = executor.execute(&query).unwrap();
         assert_eq!(result.records.len(), 2);
         assert_eq!(result.records[0].get("id"), Some(&"1".to_string()));
         assert_eq!(result.records[1].get("id"), Some(&"3".to_string()));
+    }
+
+    #[test]
+    fn test_apply_limit() {
+        let headers = vec!["id".to_string(), "name".to_string()];
+        let records = vec![
+            Record::new(HashMap::from([
+                ("id".to_string(), "1".to_string()),
+                ("name".to_string(), "Alice".to_string()),
+            ])),
+            Record::new(HashMap::from([
+                ("id".to_string(), "2".to_string()),
+                ("name".to_string(), "Bob".to_string()),
+            ])),
+            Record::new(HashMap::from([
+                ("id".to_string(), "3".to_string()),
+                ("name".to_string(), "Charlie".to_string()),
+            ])),
+        ];
+        let table = Table::new(headers, records);
+        let repository = MockRepository::new(table.clone());
+        let executor = QueryExecutor::new(repository);
+
+        let result = executor.apply_limit(&table, 2).unwrap();
+        assert_eq!(result.records.len(), 2);
+        assert_eq!(result.records[0].get("id"), Some(&"1".to_string()));
+        assert_eq!(result.records[1].get("id"), Some(&"2".to_string()));
+    }
+
+    #[test]
+    fn test_apply_limit_larger_than_records() {
+        let headers = vec!["id".to_string()];
+        let records = vec![
+            Record::new(HashMap::from([("id".to_string(), "1".to_string())])),
+            Record::new(HashMap::from([("id".to_string(), "2".to_string())])),
+        ];
+        let table = Table::new(headers, records);
+        let repository = MockRepository::new(table.clone());
+        let executor = QueryExecutor::new(repository);
+
+        let result = executor.apply_limit(&table, 10).unwrap();
+        assert_eq!(result.records.len(), 2);
+    }
+
+    #[test]
+    fn test_execute_with_limit() {
+        let headers = vec!["id".to_string(), "name".to_string()];
+        let records = vec![
+            Record::new(HashMap::from([
+                ("id".to_string(), "3".to_string()),
+                ("name".to_string(), "Charlie".to_string()),
+            ])),
+            Record::new(HashMap::from([
+                ("id".to_string(), "1".to_string()),
+                ("name".to_string(), "Alice".to_string()),
+            ])),
+            Record::new(HashMap::from([
+                ("id".to_string(), "2".to_string()),
+                ("name".to_string(), "Bob".to_string()),
+            ])),
+        ];
+        let table = Table::new(headers, records);
+        let repository = MockRepository::new(table);
+        let executor = QueryExecutor::new(repository);
+
+        let query = Query {
+            select_fields: SelectFields::All,
+            from: "test.csv".to_string(),
+            where_clause: None,
+            order_by: Some(OrderBy {
+                columns: vec![OrderColumn {
+                    field: "id".to_string(),
+                    direction: SortDirection::Asc,
+                }],
+            }),
+            limit: Some(2),
+        };
+
+        let result = executor.execute(&query).unwrap();
+        assert_eq!(result.records.len(), 2);
+        assert_eq!(result.records[0].get("id"), Some(&"1".to_string()));
+        assert_eq!(result.records[1].get("id"), Some(&"2".to_string()));
     }
 }

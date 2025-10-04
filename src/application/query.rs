@@ -7,6 +7,7 @@ pub struct Query {
     pub from: String,
     pub where_clause: Option<WhereClause>,
     pub order_by: Option<OrderBy>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -95,49 +96,51 @@ impl QueryParser {
         let select_part = &query[6..from_pos].trim(); // "SELECT"の後
         let remaining = &query[from_pos + 6..].trim(); // " FROM "の後
 
-        // WHERE句とORDER BY句の位置を探す
+        // WHERE句、ORDER BY句、LIMIT句の位置を探す
         let where_pos = lower[from_pos..].find(" where ");
         let order_pos = lower[from_pos..].find(" order by ");
+        let limit_pos = lower[from_pos..].find(" limit ");
 
-        // FROM, WHERE, ORDER BYの部分を分割
-        let (from_part, where_part, order_part) = match (where_pos, order_pos) {
-            (Some(w_pos), Some(o_pos)) => {
-                let where_actual = from_pos + w_pos;
-                let order_actual = from_pos + o_pos;
+        // FROM部分を抽出
+        let from_end = [where_pos, order_pos, limit_pos]
+            .iter()
+            .filter_map(|&p| p)
+            .min()
+            .map(|p| from_pos + p)
+            .unwrap_or(query.len());
+        let from_part = &query[from_pos + 6..from_end].trim();
 
-                if w_pos < o_pos {
-                    // WHERE → ORDER BY
-                    (
-                        &query[from_pos + 6..where_actual].trim(),
-                        Some(&query[where_actual + 7..order_actual].trim()),
-                        Some(&query[order_actual + 10..].trim()),
-                    )
-                } else {
-                    // ORDER BY → WHERE (通常はありえないが念のため)
-                    (
-                        &query[from_pos + 6..order_actual].trim(),
-                        None,
-                        Some(&query[order_actual + 10..].trim()),
-                    )
-                }
-            }
-            (Some(w_pos), None) => {
-                let where_actual = from_pos + w_pos;
-                (
-                    &query[from_pos + 6..where_actual].trim(),
-                    Some(&query[where_actual + 7..].trim()),
-                    None,
-                )
-            }
-            (None, Some(o_pos)) => {
-                let order_actual = from_pos + o_pos;
-                (
-                    &query[from_pos + 6..order_actual].trim(),
-                    None,
-                    Some(&query[order_actual + 10..].trim()),
-                )
-            }
-            (None, None) => (remaining, None, None),
+        // WHERE部分を抽出
+        let where_part = if let Some(w_pos) = where_pos {
+            let where_start = from_pos + w_pos + 7;
+            let where_end = [order_pos, limit_pos]
+                .iter()
+                .filter_map(|&p| p)
+                .min()
+                .map(|p| from_pos + p)
+                .unwrap_or(query.len());
+            Some(&query[where_start..where_end].trim())
+        } else {
+            None
+        };
+
+        // ORDER BY部分を抽出
+        let order_part = if let Some(o_pos) = order_pos {
+            let order_start = from_pos + o_pos + 10;
+            let order_end = limit_pos
+                .map(|p| from_pos + p)
+                .unwrap_or(query.len());
+            Some(&query[order_start..order_end].trim())
+        } else {
+            None
+        };
+
+        // LIMIT部分を抽出
+        let limit_part = if let Some(l_pos) = limit_pos {
+            let limit_start = from_pos + l_pos + 7;
+            Some(&query[limit_start..].trim())
+        } else {
+            None
         };
 
         // SELECT フィールドのパース
@@ -168,11 +171,19 @@ impl QueryParser {
             None
         };
 
+        // LIMIT句のパース
+        let limit = if let Some(limit_str) = limit_part {
+            Some(Self::parse_limit(limit_str)?)
+        } else {
+            None
+        };
+
         Ok(Query {
             select_fields,
             from,
             where_clause,
             order_by,
+            limit,
         })
     }
 
@@ -249,6 +260,13 @@ impl QueryParser {
         }
 
         Ok(OrderBy { columns })
+    }
+
+    fn parse_limit(limit_str: &str) -> Result<usize> {
+        limit_str
+            .trim()
+            .parse::<usize>()
+            .map_err(|_| anyhow!("Invalid LIMIT value: {}", limit_str))
     }
 }
 
@@ -511,5 +529,55 @@ mod tests {
         assert_eq!(order_by.columns[0].direction, SortDirection::Desc);
         assert_eq!(order_by.columns[1].field, "name");
         assert_eq!(order_by.columns[1].direction, SortDirection::Asc);
+    }
+
+    #[test]
+    fn test_parse_limit() {
+        let query = "SELECT * FROM ./test.csv LIMIT 5";
+        let parsed = QueryParser::parse(query).unwrap();
+
+        assert_eq!(parsed.limit, Some(5));
+    }
+
+    #[test]
+    fn test_parse_limit_with_where() {
+        let query = "SELECT * FROM ./test.csv WHERE id > 1 LIMIT 3";
+        let parsed = QueryParser::parse(query).unwrap();
+
+        assert!(parsed.where_clause.is_some());
+        assert_eq!(parsed.limit, Some(3));
+    }
+
+    #[test]
+    fn test_parse_limit_with_order_by() {
+        let query = "SELECT * FROM ./test.csv ORDER BY id DESC LIMIT 10";
+        let parsed = QueryParser::parse(query).unwrap();
+
+        assert!(parsed.order_by.is_some());
+        assert_eq!(parsed.limit, Some(10));
+    }
+
+    #[test]
+    fn test_parse_all_clauses() {
+        let query = "SELECT id, name FROM ./test.csv WHERE team_id = 1 ORDER BY id DESC LIMIT 5";
+        let parsed = QueryParser::parse(query).unwrap();
+
+        if let SelectFields::Fields(fields) = parsed.select_fields {
+            assert_eq!(fields, vec!["id", "name"]);
+        } else {
+            panic!("Expected Fields variant");
+        }
+
+        assert!(parsed.where_clause.is_some());
+        assert!(parsed.order_by.is_some());
+        assert_eq!(parsed.limit, Some(5));
+    }
+
+    #[test]
+    fn test_parse_limit_invalid() {
+        let query = "SELECT * FROM ./test.csv LIMIT abc";
+        let result = QueryParser::parse(query);
+
+        assert!(result.is_err());
     }
 }
