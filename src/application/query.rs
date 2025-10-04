@@ -14,6 +14,12 @@ pub struct Query {
 pub enum SelectFields {
     All,
     Fields(Vec<String>),
+    Aggregate(AggregateFunction),
+}
+
+#[derive(Debug, Clone)]
+pub enum AggregateFunction {
+    Count(String), // COUNT(field)
 }
 
 /// WHERE句を表す構造体
@@ -133,11 +139,20 @@ impl QueryParser {
         let select_fields = if select_part.trim() == "*" {
             SelectFields::All
         } else {
-            let fields = select_part
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect();
-            SelectFields::Fields(fields)
+            let trimmed = select_part.trim();
+            let lower = trimmed.to_lowercase();
+
+            // 集約関数のチェック
+            if lower.starts_with("count(") && lower.ends_with(")") {
+                let field = trimmed[6..trimmed.len()-1].trim().to_string();
+                SelectFields::Aggregate(AggregateFunction::Count(field))
+            } else {
+                let fields = select_part
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect();
+                SelectFields::Fields(fields)
+            }
         };
 
         // FROM句のパース（ファイルパス）

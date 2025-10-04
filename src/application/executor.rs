@@ -1,6 +1,6 @@
 use crate::domain::entity::{Record, Table};
 use crate::domain::repository::TableRepository;
-use crate::application::query::{Query, SelectFields, WhereClause, Condition, Operator, OrderBy, SortDirection};
+use crate::application::query::{Query, SelectFields, WhereClause, Condition, Operator, OrderBy, SortDirection, AggregateFunction};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::cmp::Ordering;
@@ -66,6 +66,18 @@ impl<R: TableRepository> QueryExecutor<R> {
                     .collect();
 
                 Ok(Table::new(fields.clone(), filtered_records))
+            }
+            SelectFields::Aggregate(func) => {
+                match func {
+                    AggregateFunction::Count(field) => {
+                        let count = table.records.len();
+                        let header = format!("count({})", field);
+                        let mut fields = HashMap::new();
+                        fields.insert(header.clone(), count.to_string());
+                        let record = Record::new(fields);
+                        Ok(Table::new(vec![header], vec![record]))
+                    }
+                }
             }
         }
     }
