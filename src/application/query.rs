@@ -6,6 +6,7 @@ pub struct Query {
     pub select_fields: SelectFields,
     pub from: String,
     pub where_clause: Option<WhereClause>,
+    pub order_by: Option<OrderBy>,
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +54,26 @@ impl Operator {
     }
 }
 
+/// ORDER BY句を表す構造体
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderBy {
+    pub columns: Vec<OrderColumn>,
+}
+
+/// ソート対象のカラム
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderColumn {
+    pub field: String,
+    pub direction: SortDirection,
+}
+
+/// ソート方向
+#[derive(Debug, Clone, PartialEq)]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
 /// クエリパーサー
 pub struct QueryParser;
 
@@ -74,13 +95,49 @@ impl QueryParser {
         let select_part = &query[6..from_pos].trim(); // "SELECT"の後
         let remaining = &query[from_pos + 6..].trim(); // " FROM "の後
 
-        // WHERE句の有無を確認
+        // WHERE句とORDER BY句の位置を探す
         let where_pos = lower[from_pos..].find(" where ");
-        let (from_part, where_part) = if let Some(pos) = where_pos {
-            let actual_pos = from_pos + pos;
-            (&query[from_pos + 6..actual_pos].trim(), Some(&query[actual_pos + 7..].trim()))
-        } else {
-            (remaining, None)
+        let order_pos = lower[from_pos..].find(" order by ");
+
+        // FROM, WHERE, ORDER BYの部分を分割
+        let (from_part, where_part, order_part) = match (where_pos, order_pos) {
+            (Some(w_pos), Some(o_pos)) => {
+                let where_actual = from_pos + w_pos;
+                let order_actual = from_pos + o_pos;
+
+                if w_pos < o_pos {
+                    // WHERE → ORDER BY
+                    (
+                        &query[from_pos + 6..where_actual].trim(),
+                        Some(&query[where_actual + 7..order_actual].trim()),
+                        Some(&query[order_actual + 10..].trim()),
+                    )
+                } else {
+                    // ORDER BY → WHERE (通常はありえないが念のため)
+                    (
+                        &query[from_pos + 6..order_actual].trim(),
+                        None,
+                        Some(&query[order_actual + 10..].trim()),
+                    )
+                }
+            }
+            (Some(w_pos), None) => {
+                let where_actual = from_pos + w_pos;
+                (
+                    &query[from_pos + 6..where_actual].trim(),
+                    Some(&query[where_actual + 7..].trim()),
+                    None,
+                )
+            }
+            (None, Some(o_pos)) => {
+                let order_actual = from_pos + o_pos;
+                (
+                    &query[from_pos + 6..order_actual].trim(),
+                    None,
+                    Some(&query[order_actual + 10..].trim()),
+                )
+            }
+            (None, None) => (remaining, None, None),
         };
 
         // SELECT フィールドのパース
@@ -104,10 +161,18 @@ impl QueryParser {
             None
         };
 
+        // ORDER BY句のパース
+        let order_by = if let Some(order_str) = order_part {
+            Some(Self::parse_order_by(order_str)?)
+        } else {
+            None
+        };
+
         Ok(Query {
             select_fields,
             from,
             where_clause,
+            order_by,
         })
     }
 
@@ -156,6 +221,34 @@ impl QueryParser {
         }
 
         Ok(WhereClause { conditions })
+    }
+
+    fn parse_order_by(order_str: &str) -> Result<OrderBy> {
+        let columns_str: Vec<&str> = order_str.split(',').collect();
+        let mut columns = Vec::new();
+
+        for col_str in columns_str {
+            let col_str = col_str.trim();
+            let lower_col = col_str.to_lowercase();
+
+            let (field, direction) = if lower_col.ends_with(" desc") {
+                let field = col_str[..col_str.len() - 5].trim();
+                (field, SortDirection::Desc)
+            } else if lower_col.ends_with(" asc") {
+                let field = col_str[..col_str.len() - 4].trim();
+                (field, SortDirection::Asc)
+            } else {
+                // デフォルトはASC
+                (col_str, SortDirection::Asc)
+            };
+
+            columns.push(OrderColumn {
+                field: field.to_string(),
+                direction,
+            });
+        }
+
+        Ok(OrderBy { columns })
     }
 }
 
@@ -338,5 +431,85 @@ mod tests {
         assert_eq!(where_clause.conditions.len(), 2);
         assert_eq!(where_clause.conditions[0].operator, Operator::GreaterOrEqual);
         assert_eq!(where_clause.conditions[1].operator, Operator::LessThan);
+    }
+
+    #[test]
+    fn test_parse_order_by_single_column() {
+        let query = "SELECT * FROM ./test.csv ORDER BY id";
+        let parsed = QueryParser::parse(query).unwrap();
+
+        let order_by = parsed.order_by.unwrap();
+        assert_eq!(order_by.columns.len(), 1);
+        assert_eq!(order_by.columns[0].field, "id");
+        assert_eq!(order_by.columns[0].direction, SortDirection::Asc);
+    }
+
+    #[test]
+    fn test_parse_order_by_asc() {
+        let query = "SELECT * FROM ./test.csv ORDER BY id ASC";
+        let parsed = QueryParser::parse(query).unwrap();
+
+        let order_by = parsed.order_by.unwrap();
+        assert_eq!(order_by.columns[0].direction, SortDirection::Asc);
+    }
+
+    #[test]
+    fn test_parse_order_by_desc() {
+        let query = "SELECT * FROM ./test.csv ORDER BY id DESC";
+        let parsed = QueryParser::parse(query).unwrap();
+
+        let order_by = parsed.order_by.unwrap();
+        assert_eq!(order_by.columns[0].direction, SortDirection::Desc);
+    }
+
+    #[test]
+    fn test_parse_order_by_multiple_columns() {
+        let query = "SELECT * FROM ./test.csv ORDER BY team_id ASC, id DESC";
+        let parsed = QueryParser::parse(query).unwrap();
+
+        let order_by = parsed.order_by.unwrap();
+        assert_eq!(order_by.columns.len(), 2);
+        assert_eq!(order_by.columns[0].field, "team_id");
+        assert_eq!(order_by.columns[0].direction, SortDirection::Asc);
+        assert_eq!(order_by.columns[1].field, "id");
+        assert_eq!(order_by.columns[1].direction, SortDirection::Desc);
+    }
+
+    #[test]
+    fn test_parse_with_where_and_order_by() {
+        let query = "SELECT * FROM ./test.csv WHERE team_id = 1 ORDER BY id DESC";
+        let parsed = QueryParser::parse(query).unwrap();
+
+        assert!(parsed.where_clause.is_some());
+        assert!(parsed.order_by.is_some());
+
+        let where_clause = parsed.where_clause.unwrap();
+        assert_eq!(where_clause.conditions[0].field, "team_id");
+
+        let order_by = parsed.order_by.unwrap();
+        assert_eq!(order_by.columns[0].field, "id");
+        assert_eq!(order_by.columns[0].direction, SortDirection::Desc);
+    }
+
+    #[test]
+    fn test_parse_complex_query() {
+        let query = "SELECT id, name FROM ./test.csv WHERE team_id >= 1 ORDER BY id DESC, name ASC";
+        let parsed = QueryParser::parse(query).unwrap();
+
+        if let SelectFields::Fields(fields) = parsed.select_fields {
+            assert_eq!(fields, vec!["id", "name"]);
+        } else {
+            panic!("Expected Fields variant");
+        }
+
+        let where_clause = parsed.where_clause.unwrap();
+        assert_eq!(where_clause.conditions[0].field, "team_id");
+
+        let order_by = parsed.order_by.unwrap();
+        assert_eq!(order_by.columns.len(), 2);
+        assert_eq!(order_by.columns[0].field, "id");
+        assert_eq!(order_by.columns[0].direction, SortDirection::Desc);
+        assert_eq!(order_by.columns[1].field, "name");
+        assert_eq!(order_by.columns[1].direction, SortDirection::Asc);
     }
 }
