@@ -41,19 +41,6 @@ pub enum Operator {
     LessOrEqual,     // <=
 }
 
-impl Operator {
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "=" => Ok(Operator::Equal),
-            "!=" => Ok(Operator::NotEqual),
-            ">" => Ok(Operator::GreaterThan),
-            ">=" => Ok(Operator::GreaterOrEqual),
-            "<" => Ok(Operator::LessThan),
-            "<=" => Ok(Operator::LessOrEqual),
-            _ => Err(anyhow!("Unknown operator: {}", s)),
-        }
-    }
-}
 
 /// ORDER BY句を表す構造体
 #[derive(Debug, Clone, PartialEq)]
@@ -94,7 +81,6 @@ impl QueryParser {
             .ok_or_else(|| anyhow!("FROM clause not found"))?;
 
         let select_part = &query[6..from_pos].trim(); // "SELECT"の後
-        let remaining = &query[from_pos + 6..].trim(); // " FROM "の後
 
         // WHERE句、ORDER BY句、LIMIT句の位置を探す
         let where_pos = lower[from_pos..].find(" where ");

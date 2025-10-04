@@ -1,6 +1,6 @@
 use crate::domain::entity::{Record, Table};
 use crate::domain::repository::TableRepository;
-use crate::application::query::{Query, SelectFields, WhereClause, Condition, Operator, OrderBy, OrderColumn, SortDirection};
+use crate::application::query::{Query, SelectFields, WhereClause, Condition, Operator, OrderBy, SortDirection};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::cmp::Ordering;
