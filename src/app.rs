@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 pub trait Reader {
-    fn read(&self, filepath: &str) -> Result<Vec<Vec<String>>>;
+    fn read(&self, filepath: &str, disable_header: bool) -> Result<Vec<Vec<String>>>;
 }
 
 pub struct CountExecutor<R: Reader> {
@@ -14,7 +14,7 @@ impl<R: Reader> CountExecutor<R> {
     }
 
     pub fn execute(&self, filepath: &str) -> Result<usize> {
-        let rows = self.reader.read(filepath)?;
+        let rows = self.reader.read(filepath, true)?;
         Ok(rows.len())
     }
 }
@@ -29,7 +29,7 @@ mod tests {
     }
 
     impl Reader for MockReader {
-        fn read(&self, _filepath: &str) -> Result<Vec<Vec<String>>> {
+        fn read(&self, _filepath: &str, _disable_header: bool) -> Result<Vec<Vec<String>>> {
             Ok(self.data.clone())
         }
     }
