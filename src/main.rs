@@ -1,15 +1,24 @@
-use std::{env, fs::File};
+mod app;
+mod infra;
+
+
+use std::env;
+
 use anyhow::{ Result, anyhow };
-use csv::ReaderBuilder;
+
+use crate::{app::CountExecutor, infra::CSVReader};
 
 fn main() -> Result<()>{
     let args: Vec<String> = env::args().collect();
     let action = get_action(&args)?;
 
+    let reader = CSVReader;
+
     match action {
         Action::Count { filepath } => {
-            let rows = read(&filepath)?;
-            println!("{} records", rows.len());
+            let executor = CountExecutor::new(reader);
+            let count = executor.execute(&filepath)?;
+            println!("{} records", count);
         }
     }
 
@@ -34,19 +43,4 @@ fn get_action(args: &[String]) -> Result<Action> {
         }
         _ => Err(anyhow!("unknown action")),
     }
-}
-
-fn read(filepath: &str) -> Result<Vec<Vec<String>>> {
-    let file = File::open(filepath)?;
-    let mut rdr = ReaderBuilder::new()
-        .from_reader(file);
-
-    let mut rows = Vec::new();
-
-    for result in rdr.records() {
-        let record = result?;
-        rows.push(record.iter().map(|s| s.to_string()).collect());
-    }
-
-    Ok(rows)
 }
