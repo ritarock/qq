@@ -10,6 +10,10 @@ use crate::{app::CountExecutor, infra::CSVReader};
 
 fn main() -> Result<()>{
     let args: Vec<String> = env::args().collect();
+    run(&args)
+}
+
+fn run(args: &[String]) -> Result<()> {
     let action = get_action(&args)?;
 
     let reader = CSVReader;
@@ -42,5 +46,66 @@ fn get_action(args: &[String]) -> Result<Action> {
         Ok(Action::Count { filepath: filepath.to_string() })
         }
         _ => Err(anyhow!("unknown action")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+
+    #[test]
+    fn test_get_action_count() -> Result<()> {
+        let args = vec![
+            "app".to_string(),
+            "count".to_string(),
+            "file.csv".to_string(),
+        ];
+
+        let action = get_action(&args)?;
+
+        match action {
+            Action::Count { filepath } => {
+                assert_eq!(filepath, "file.csv");
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_action_missing_action() {
+        let args = vec![
+            "app".to_string(),
+        ];
+
+        let result= get_action(&args);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_action_missing_filepath() {
+        let args = vec![
+            "app".to_string(),
+            "count".to_string(),
+        ];
+
+        let result= get_action(&args);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_action_unknown() {
+        let args = vec![
+            "app".to_string(),
+            "unknown".to_string(),
+            "file.csv".to_string(),
+        ];
+
+        let result= get_action(&args);
+
+        assert!(result.is_err());
     }
 }
