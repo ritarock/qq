@@ -1,5 +1,5 @@
-use anyhow::{Result, anyhow};
 use super::Reader;
+use anyhow::{Result, anyhow};
 
 pub struct HeaderExecutor<R: Reader> {
     reader: R,

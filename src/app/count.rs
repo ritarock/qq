@@ -1,5 +1,5 @@
-use anyhow::Result;
 use super::Reader;
+use anyhow::Result;
 
 pub struct CountExecutor<R: Reader> {
     reader: R,
