@@ -1,17 +1,19 @@
 pub mod count;
 pub mod header;
+pub mod select;
 
 pub use count::CountExecutor;
 pub use header::HeaderExecutor;
 
 use anyhow::Result;
 
-use crate::infra::CSVReader;
+use crate::{app::select::SelectExecutor, infra::CSVReader};
 
 #[derive(Debug, PartialEq)]
 pub enum Action {
     Count { filepath: String },
     Header { filepath: String },
+    Select { filepath: String, colum: usize },
 }
 
 pub trait Reader {
@@ -30,6 +32,14 @@ pub fn execute(action: Action, reader: CSVReader) -> Result<()> {
             let executor = HeaderExecutor::new(reader);
             let header = executor.execute(&filepath)?;
             println!("{}", header);
+        }
+
+        Action::Select { filepath, colum } => {
+            let executor = SelectExecutor::new(reader);
+            let result = executor.execute(&filepath, colum)?;
+            for v in &result {
+                println!("{}", v);
+            }
         }
     }
 

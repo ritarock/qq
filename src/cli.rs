@@ -27,6 +27,16 @@ fn get_action(args: &[String]) -> Result<Action> {
                 filepath: filepath.to_string(),
             })
         }
+        "SELECT" => {
+            let column = args
+                .get(2)
+                .ok_or_else(|| anyhow!("column number is required"))?;
+            let filepath = args.get(3).ok_or_else(|| anyhow!("filepath is required"))?;
+            Ok(Action::Select {
+                filepath: filepath.to_string(),
+                colum: column.parse().unwrap(),
+            })
+        }
         _ => Err(anyhow!("unknown action")),
     }
 }
@@ -77,6 +87,28 @@ mod tests {
     }
 
     #[test]
+    fn test_get_action_select() -> Result<()> {
+        let args = vec![
+            "app".to_string(),
+            "select".to_string(),
+            "1".to_string(),
+            "file.csv".to_string(),
+        ];
+
+        let action = get_action(&args)?;
+
+        assert_eq!(
+            action,
+            Action::Select {
+                filepath: "file.csv".to_string(),
+                colum: 1
+            }
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_get_action_missing_action() {
         let args = vec!["app".to_string()];
 
@@ -97,6 +129,24 @@ mod tests {
     #[test]
     fn test_get_action_header_missing_filepath() {
         let args = vec!["app".to_string(), "header".to_string()];
+
+        let result = get_action(&args);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_action_select_missing_column() {
+        let args = vec!["app".to_string(), "select".to_string()];
+
+        let result = get_action(&args);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_action_select_missing_filepath() {
+        let args = vec!["app".to_string(), "select".to_string(), "1".to_string()];
 
         let result = get_action(&args);
 
