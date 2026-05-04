@@ -1,36 +1,14 @@
 use anyhow::{Result, anyhow};
 
 use crate::{
-    app::{CountExecutor, HeaderExecutor},
+    app::{Action, execute},
     infra::CSVReader,
 };
 
-#[derive(Debug, PartialEq)]
-enum Action {
-    Count { filepath: String },
-    Header { filepath: String },
-}
-
 pub fn run(args: &[String]) -> Result<()> {
     let action = get_action(&args)?;
-
     let reader = CSVReader;
-
-    match action {
-        Action::Count { filepath } => {
-            let executor = CountExecutor::new(reader);
-            let count = executor.execute(&filepath)?;
-            println!("{} records", count);
-        }
-
-        Action::Header { filepath } => {
-            let executor = HeaderExecutor::new(reader);
-            let header = executor.execute(&filepath)?;
-            println!("{}", header);
-        }
-    }
-
-    Ok(())
+    execute(action, reader)
 }
 
 fn get_action(args: &[String]) -> Result<Action> {
