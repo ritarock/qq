@@ -17,9 +17,11 @@ impl<R: Reader> HeaderExecutor<R> {
 
         let header = first
             .iter()
-            .map(|s| s.trim())
+            .enumerate()
+            .map(|(i, s)| format!("{}:{}", i + 1, s.trim()))
             .collect::<Vec<_>>()
             .join(", ");
+
         Ok(header)
     }
 }
@@ -50,7 +52,7 @@ mod tests {
 
         let result = executor.execute("")?;
 
-        assert_eq!(result, "id, name");
+        assert_eq!(result, "1:id, 2:name");
 
         Ok(())
     }
