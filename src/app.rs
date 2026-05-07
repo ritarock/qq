@@ -11,9 +11,21 @@ use crate::{app::select::SelectExecutor, infra::CSVReader};
 
 #[derive(Debug, PartialEq)]
 pub enum Action {
-    Count { filepath: String },
-    Header { filepath: String },
-    Select { filepath: String, colum: usize },
+    Count {
+        filepath: String,
+    },
+    Header {
+        filepath: String,
+    },
+    Select {
+        filepath: String,
+        select_column: SelectColumn,
+    },
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SelectColumn {
+    pub column_number: usize,
 }
 
 pub trait Reader {
@@ -34,9 +46,12 @@ pub fn execute(action: Action, reader: CSVReader) -> Result<()> {
             println!("{}", header);
         }
 
-        Action::Select { filepath, colum } => {
+        Action::Select {
+            filepath,
+            select_column,
+        } => {
             let executor = SelectExecutor::new(reader);
-            let result = executor.execute(&filepath, colum)?;
+            let result = executor.execute(&filepath, select_column)?;
             for v in &result {
                 println!("{}", v);
             }

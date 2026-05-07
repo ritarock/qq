@@ -1,7 +1,10 @@
+pub mod parser;
+
 use anyhow::{Result, anyhow};
 
 use crate::{
     app::{Action, execute},
+    cli::parser::select_parser,
     infra::CSVReader,
 };
 
@@ -26,12 +29,12 @@ fn get_action(args: &[String]) -> Result<Action> {
             let column_str = args
                 .get(3)
                 .ok_or_else(|| anyhow!("column number is required"))?;
-            let column = column_str
-                .parse::<usize>()
-                .map_err(|_| anyhow!(format!("invalid column: {}", column_str)))?;
+
+            let column_number = select_parser(column_str)?;
+
             Ok(Action::Select {
                 filepath: filepath.to_string(),
-                colum: column,
+                select_column: column_number,
             })
         }
         _ => Err(anyhow!("unknown action")),
@@ -40,11 +43,13 @@ fn get_action(args: &[String]) -> Result<Action> {
 
 #[cfg(test)]
 mod tests {
+    use crate::app::SelectColumn;
+
     use super::*;
     use anyhow::Result;
 
     #[test]
-    fn test_get_action_count() -> Result<()> {
+    fn test_get_action_pass_count() -> Result<()> {
         let args = vec![
             "app".to_string(),
             "file.csv".to_string(),
@@ -64,7 +69,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_action_header() -> Result<()> {
+    fn test_get_action_pass_header() -> Result<()> {
         let args = vec![
             "app".to_string(),
             "file.csv".to_string(),
@@ -84,7 +89,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_action_select() -> Result<()> {
+    fn test_get_action_pass_select() -> Result<()> {
         let args = vec![
             "app".to_string(),
             "file.csv".to_string(),
@@ -98,7 +103,7 @@ mod tests {
             action,
             Action::Select {
                 filepath: "file.csv".to_string(),
-                colum: 1
+                select_column: SelectColumn { column_number: 1 }
             }
         );
 
@@ -106,25 +111,27 @@ mod tests {
     }
 
     #[test]
-    fn test_get_action_missing_filepath() {
+    fn test_get_action_failed_no_filepath() -> Result<()> {
         let args = vec!["app".to_string()];
 
         let result = get_action(&args);
 
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_get_action_missing_action() {
+    fn test_get_action_failed_no_action() -> Result<()> {
         let args = vec!["app".to_string(), "file.csv".to_string()];
 
         let result = get_action(&args);
 
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_get_action_unknown() {
+    fn test_get_action_failed_unknown_action() -> Result<()> {
         let args = vec![
             "app".to_string(),
             "file.csv".to_string(),
@@ -134,10 +141,11 @@ mod tests {
         let result = get_action(&args);
 
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_get_action_select_missing_column() {
+    fn test_get_action_failed_select_missing_column() -> Result<()> {
         let args = vec![
             "app".to_string(),
             "file.csv".to_string(),
@@ -147,10 +155,11 @@ mod tests {
         let result = get_action(&args);
 
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_get_action_select_invalid_column() {
+    fn test_get_action_failed_select_invalid_column() -> Result<()> {
         let args = vec![
             "app".to_string(),
             "file.csv".to_string(),
@@ -161,5 +170,6 @@ mod tests {
         let result = get_action(&args);
 
         assert!(result.is_err());
+        Ok(())
     }
 }

@@ -32,7 +32,7 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_count() -> Result<()> {
+    fn test_count_executor_execute_pass() -> Result<()> {
         let mock_data = vec![
             vec!["id".to_string(), "name".to_string()],
             vec!["1".to_string(), "name1".to_string()],
@@ -48,7 +48,7 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_count_empty() -> Result<()> {
+    fn test_count_executor_execute_pass_empty() -> Result<()> {
         let mock_data = vec![];
         let reader = MockReader { data: mock_data };
         let executor = CountExecutor::new(reader);

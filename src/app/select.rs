@@ -1,3 +1,5 @@
+use crate::app::SelectColumn;
+
 use super::Reader;
 use anyhow::Result;
 
@@ -10,9 +12,9 @@ impl<R: Reader> SelectExecutor<R> {
         Self { reader }
     }
 
-    pub fn execute(&self, filepath: &str, column: usize) -> Result<Vec<String>> {
+    pub fn execute(&self, filepath: &str, select_column: SelectColumn) -> Result<Vec<String>> {
         let rows = self.reader.read(filepath, false)?;
-        let column = column - 1;
+        let column = select_column.column_number - 1;
 
         let result = rows
             .iter()
@@ -40,7 +42,7 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_select() -> Result<()> {
+    fn test_select_executor_execute_pass() -> Result<()> {
         let mock_data = vec![
             vec!["id".to_string(), "name".to_string()],
             vec!["1".to_string(), "name1".to_string()],
@@ -48,7 +50,7 @@ mod tests {
         let reader = MockReader { data: mock_data };
         let executor = SelectExecutor::new(reader);
 
-        let result = executor.execute("", 1)?;
+        let result = executor.execute("", SelectColumn { column_number: 1 })?;
 
         assert_eq!(result, vec!["id".to_string(), "1".to_string()]);
 
@@ -56,12 +58,12 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_count_empty() -> Result<()> {
+    fn test_select_executor_execute_pass_empty() -> Result<()> {
         let mock_data = vec![];
         let reader = MockReader { data: mock_data };
         let executor = SelectExecutor::new(reader);
 
-        let result = executor.execute("", 1)?;
+        let result = executor.execute("", SelectColumn { column_number: 1 })?;
 
         assert_eq!(result, Vec::<String>::new());
 

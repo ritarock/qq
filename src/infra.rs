@@ -31,7 +31,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn test_read_csv() -> Result<()> {
+    fn test_read_pass() -> Result<()> {
         let mut file = NamedTempFile::new()?;
         writeln!(file, "id,name")?;
         writeln!(file, "1,name1")?;
@@ -48,7 +48,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_csv_with_header() -> Result<()> {
+    fn test_read_pass_with_header() -> Result<()> {
         let mut file = NamedTempFile::new()?;
         writeln!(file, "id,name")?;
         writeln!(file, "1,name1")?;
@@ -66,7 +66,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_empty_csv() -> Result<()> {
+    fn test_read_pass_empty() -> Result<()> {
         let file = NamedTempFile::new()?;
 
         let reader = CSVReader;

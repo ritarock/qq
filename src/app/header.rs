@@ -42,7 +42,7 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_header() -> Result<()> {
+    fn test_header_executor_execute_pass() -> Result<()> {
         let mock_data = vec![
             vec!["id".to_string(), "name".to_string()],
             vec!["1".to_string(), "name1".to_string()],
@@ -58,7 +58,7 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_header_empty() -> Result<()> {
+    fn test_header_executor_execute_failed_empty() -> Result<()> {
         let mock_data = vec![];
         let reader = MockReader { data: mock_data };
         let executor = HeaderExecutor::new(reader);
