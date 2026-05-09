@@ -4,11 +4,13 @@ use crate::app::SelectColumn;
 
 pub fn select_parser(column: &str) -> Result<SelectColumn> {
     if column.contains(',') {
-        let (before, after) = column.split_once(',').unwrap();
-        let before = validate(before)?;
-        let after = validate(after)?;
+        let column_numbers = column
+            .split(',')
+            .map(|s| validate(s.trim()))
+            .collect::<Result<Vec<usize>>>()?;
+
         return Ok(SelectColumn {
-            column_number: vec![before, after],
+            column_number: column_numbers,
         });
     }
 
@@ -46,13 +48,13 @@ mod tests {
 
     #[test]
     fn test_select_parser_pass_with_comma() -> Result<()> {
-        let column = "1,2".to_string();
+        let column = "1,2,3".to_string();
         let result = select_parser(&column)?;
 
         assert_eq!(
             result,
             SelectColumn {
-                column_number: vec![1, 2]
+                column_number: vec![1, 2, 3]
             }
         );
         Ok(())
