@@ -103,7 +103,9 @@ mod tests {
             action,
             Action::Select {
                 filepath: "file.csv".to_string(),
-                select_column: SelectColumn { column_number: 1 }
+                select_column: SelectColumn {
+                    column_number: vec![1]
+                }
             }
         );
 

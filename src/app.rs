@@ -25,7 +25,7 @@ pub enum Action {
 
 #[derive(Debug, PartialEq)]
 pub struct SelectColumn {
-    pub column_number: usize,
+    pub column_number: Vec<usize>,
 }
 
 pub trait Reader {
