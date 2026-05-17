@@ -3,7 +3,7 @@ pub mod parser;
 use anyhow::{Result, anyhow};
 
 use crate::{
-    app::{Action, execute},
+    app::{Action, HelpOption, execute},
     cli::parser::select_parser,
     infra::CSVReader,
 };
@@ -15,22 +15,56 @@ pub fn run(args: &[String]) -> Result<()> {
 }
 
 fn get_action(args: &[String]) -> Result<Action> {
-    let filepath = args.get(1).ok_or_else(|| anyhow!("filepath is required"))?;
+    let arg = args.get(1).ok_or_else(|| anyhow!("filepath is required"))?;
+
+    if arg.to_uppercase().as_str() == "HELP".to_string() {
+        return Ok(Action::Help {
+            help_option: HelpOption::AppHelp,
+        });
+    }
+
+    let filepath = arg;
+
     let action = args.get(2).ok_or_else(|| anyhow!("action is required"))?;
 
     match action.to_uppercase().as_str() {
-        "COUNT" => Ok(Action::Count {
-            filepath: filepath.to_string(),
-        }),
-        "HEADER" => Ok(Action::Header {
-            filepath: filepath.to_string(),
-        }),
+        "COUNT" => match args.get(3) {
+            Some(_) => {
+                return Ok(Action::Help {
+                    help_option: HelpOption::CountHelp,
+                });
+            }
+            None => {
+                return Ok(Action::Count {
+                    filepath: filepath.to_string(),
+                });
+            }
+        },
+
+        "HEADER" => match args.get(3) {
+            Some(_) => {
+                return Ok(Action::Help {
+                    help_option: HelpOption::HeaderHelp,
+                });
+            }
+            None => {
+                return Ok(Action::Header {
+                    filepath: filepath.to_string(),
+                });
+            }
+        },
+
         "SELECT" => {
-            let column_str = args
+            let arg = args
                 .get(3)
                 .ok_or_else(|| anyhow!("column number is required"))?;
+            if arg.to_uppercase().as_str() == "HELP".to_string() {
+                return Ok(Action::Help {
+                    help_option: HelpOption::SelectHelp,
+                });
+            }
 
-            let column_number = select_parser(column_str)?;
+            let column_number = select_parser(arg)?;
 
             Ok(Action::Select {
                 filepath: filepath.to_string(),
@@ -172,6 +206,81 @@ mod tests {
         let result = get_action(&args);
 
         assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_action_help_app() -> Result<()> {
+        let args = vec!["app".to_string(), "help".to_string()];
+
+        let result = get_action(&args)?;
+
+        assert_eq!(
+            result,
+            Action::Help {
+                help_option: HelpOption::AppHelp
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_action_help_count() -> Result<()> {
+        let args = vec![
+            "app".to_string(),
+            "file.csv".to_string(),
+            "count".to_string(),
+            "help".to_string(),
+        ];
+
+        let result = get_action(&args)?;
+
+        assert_eq!(
+            result,
+            Action::Help {
+                help_option: HelpOption::CountHelp
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_action_help_header() -> Result<()> {
+        let args = vec![
+            "app".to_string(),
+            "file.csv".to_string(),
+            "header".to_string(),
+            "help".to_string(),
+        ];
+
+        let result = get_action(&args)?;
+
+        assert_eq!(
+            result,
+            Action::Help {
+                help_option: HelpOption::HeaderHelp
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_action_help_select() -> Result<()> {
+        let args = vec![
+            "app".to_string(),
+            "file.csv".to_string(),
+            "select".to_string(),
+            "help".to_string(),
+        ];
+
+        let result = get_action(&args)?;
+
+        assert_eq!(
+            result,
+            Action::Help {
+                help_option: HelpOption::SelectHelp
+            }
+        );
         Ok(())
     }
 }
